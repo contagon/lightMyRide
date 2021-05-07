@@ -1,8 +1,5 @@
+#define FASTLED_INTERNAL
 #include "FastLED.h"
-
-// How many leds in your strip?
-#include <FastLED.h>
-
 
 #define OCTAVE 1 //   // Group buckets into octaves  (use the log output function LOG_OUT 1)
 #define OCT_NORM 0 // Don't normalise octave intensities by number of bins
@@ -21,8 +18,8 @@ int noise[] = {204,195,100,90,85,80,75,75}; // noise for NANO
 // Params for width and height
 const uint8_t kMatrixWidth = 11;
 const uint8_t kMatrixHeight = 27;
- #define NUM_LEDS (kMatrixWidth * kMatrixHeight)
-//#define NUM_LEDS    15
+// #define NUM_LEDS (kMatrixWidth * kMatrixHeight)
+#define NUM_LEDS    15
 
 CRGB leds[NUM_LEDS];
 
