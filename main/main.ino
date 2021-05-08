@@ -1,28 +1,49 @@
+// Import libraries
 #define FASTLED_INTERNAL
 #include "FastLED.h"
+#include <Encoder.h>
 
-#define OCTAVE 1 //   // Group buckets into octaves  (use the log output function LOG_OUT 1)
-#define OCT_NORM 0 // Don't normalise octave intensities by number of bins
-#define FHT_N 256 // set to 256 point fht
-#include <FHT.h> // include the library
+// ALL PINS
+#define PIN_BUTT1   4
+#define PIN_BUTT2   4
+#define PIN_ENC_1_A 2
+#define PIN_ENC_1_B 2
+#define PIN_ENC_2_A 2
+#define PIN_ENC_2_B 2
+#define PIN_DASH    5
+#define PIN_F_SEAT  5
+#define PIN_F_DOOR  5
+#define PIN_B_DOOR  7
 
+// LED Quantities
+#define NUM_DASH    5
+#define NUM_F_SEAT  5
+#define NUM_F_DOOR  5
+#define NUM_B_DOOR  7
 
-int noise[] = {204,195,100,90,85,80,75,75}; // noise for NANO
-
-#define LED_PIN     5
-#define LED_TYPE    WS2811
+// LED Definitions
+#define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB
+CRGB dash[NUM_DASH];
+CRGB f_seat[NUM_F_SEAT];
+CRGB f_door[NUM_F_DOOR];
+CRGB b_door[NUM_B_DOOR];
+
+// Setup encoders
+Encoder enc1(PIN_ENC_1_A, PIN_ENC_1_B);
+Encoder enc2(PIN_ENC_2_A, PIN_ENC_2_B);
+
+// Use these for current encoder/button behavior
+long enc1Pos  = -999;
+long enc2Pos  = -999;
+bool butt1Pressed = false;
+bool butt2Pressed = false;
+
+unsigned long lastButt1 = 0;
+unsigned long lastButt2 = 0;
 
 
-// TODO: figure out which way is width/height
-// Params for width and height
-const uint8_t kMatrixWidth = 11;
-const uint8_t kMatrixHeight = 27;
-// #define NUM_LEDS (kMatrixWidth * kMatrixHeight)
-#define NUM_LEDS    15
-
-CRGB leds[NUM_LEDS];
-
+// Setup everything
 void setup() { 
     delay(1000);  
 
@@ -31,55 +52,75 @@ void setup() {
     Serial.print("Starting...");
 
     // Setup LEDS
-    FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection( TypicalLEDStrip );
+    FastLED.addLeds<LED_TYPE, PIN_DASH, COLOR_ORDER>(dash, NUM_DASH).setCorrection( TypicalLEDStrip );
+    FastLED.addLeds<LED_TYPE, PIN_F_SEAT, COLOR_ORDER>(f_seat, NUM_F_SEAT).setCorrection( TypicalLEDStrip );
+    FastLED.addLeds<LED_TYPE, PIN_F_DOOR, COLOR_ORDER>(f_door, NUM_F_DOOR).setCorrection( TypicalLEDStrip );
+    FastLED.addLeds<LED_TYPE, PIN_B_DOOR, COLOR_ORDER>(b_door, NUM_B_DOOR).setCorrection( TypicalLEDStrip );
     FastLED.setBrightness (200);
-    fill_solid(leds, NUM_LEDS, CRGB::Black); 
+    fill_solid(dash, NUM_DASH, CRGB::Black); 
+    fill_solid(f_seat, NUM_F_SEAT, CRGB::Black); 
+    fill_solid(f_door, NUM_F_DOOR, CRGB::Black); 
+    fill_solid(b_door, NUM_B_DOOR, CRGB::Black); 
     FastLED.show();  
 
-    // Setup reading from mic on adc port
-    // TIMSK0 = 0; // turn off timer0 for lower jitter
-    ADCSRA = 0xe5; // set the adc to free running mode
-    ADMUX = 0x40; // use adc0
-    DIDR0 = 0x01; // turn off the digital input for adc0
+    // Setup Encoder / button
+    pinMode(PIN_BUTT1, INPUT_PULLUP);
+    pinMode(PIN_BUTT2, INPUT_PULLUP);
+
+    // TODO: Cool turn on sequence?
 }
 
-
-
-void loop() { 
-    while (1) { // reduces jitter
-
-        // TODO Figure out what this does
-        cli();  // UDRE interrupt slows this way down on arduino1.0
-     
-        // Read 256 samples from microphone
-        for (int i = 0 ; i < FHT_N ; i++) { // save 256 samples
-            while (!(ADCSRA & 0x10)); // wait for adc to be ready
-            ADCSRA = 0xf5; // restart adc
-            byte m = ADCL; // fetch adc data
-            byte j = ADCH;
-            int k = (j << 8) | m; // form into an int
-            k -= 0x0200; // form into a signed int
-            k <<= 6; // form into a 16b signed int
-            fht_input[i] = k; // put real data into bins
-        }
-        // FFT the mic data - saved in fht_oct_out[i]
-        fht_window(); // window the data for better frequency response
-        fht_reorder(); // reorder the data before doing the fht
-        fht_run(); // process the data in the fht
-        fht_mag_octave(); // take the output of the fht  fht_mag_log()
-
-        // TODO Figure out what this does
-        sei();
- 
-
-        // TODO Do logic to process FFT data into brightness
-        // TODO Figure out interpolating between octaves
-        // TODOo Figure out color control using potentiometer
-
-        // goes through each octave. skip the first 1, which is not useful
-        Serial.print("Printing FFT data");
-        for (int i = 1; i < 8; i++) { 
-            Serial.print(i); 
-        }
+void updateSensors(){
+    //  check encoder locations
+    long newPosition = enc1.read();
+    if (newPosition != enc1Pos) {
+        Serial.println(newPosition);
+        enc1Pos = newPosition;
     }
+    newPosition = enc2.read();
+    if (newPosition != enc2Pos) {
+        Serial.println(newPosition);
+        enc2Pos = newPosition;
+    }
+
+    // Check button click
+    int btnState = digitalRead(PIN_BUTT1);
+    if (btnState == LOW) {
+        if (millis() - lastButt1 > 50) {
+            Serial.println("Button pressed!");
+            butt1Pressed = true;
+        }
+        else {
+            butt1Pressed = false;
+        }
+        lastButt1 = millis();
+    }
+    btnState = digitalRead(PIN_BUTT2);
+    if (btnState == LOW) {
+        if (millis() - lastButt2 > 50) {
+            butt2Pressed = true;
+        }
+        else {
+            butt2Pressed = false;
+        }
+        lastButt2 = millis();
+    }
+}
+
+void loop() {
+    // Updates the following variables for in enabling LEDS
+    // enc1Pos
+    // enc2Pos
+    // butt1Pressed
+    // butt2Pressed
+    updateSensors();
+
+    int hue = enc1Pos % 255;
+    int val = enc2Pos % 255;
+    fill_solid( dash,   NUM_DASH,   CRGB( hue, 255, val) );
+    fill_solid( f_seat, NUM_F_SEAT, CRGB( hue, 255, val) );
+    fill_solid( f_door, NUM_F_DOOR, CRGB( hue, 255, val) );
+    fill_solid( b_door, NUM_B_DOOR, CRGB( hue, 255, val) );
+
+    FastLED.show();
 }
