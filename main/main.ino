@@ -144,7 +144,7 @@ void loop() {
     updateSensors();
 
     if(butt1Pressed){
-        rainbowMode = !rainbowMode
+        rainbowMode = !rainbowMode;
     }
 
     if(rainbowMode){
